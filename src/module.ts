@@ -1,19 +1,17 @@
-import { ConfigModule, Config } from '@ramonornela/configuration';
-import { NgModule } from '@angular/core';
-import { Resolve } from './resolve';
-import { Request } from './request';
-import { Metadata } from './metadata/metadata';
-import { MetadataBase } from './metadata/metadata-base';
+import { ModuleWithProviders, NgModule } from '@angular/core';
+import { ConfigRoutesToken, Metadata, MetadataBase, Request, Resolve } from './providers';
 
-@NgModule({
-  imports: [
-    ConfigModule
-  ],
-  providers: [
-    Resolve,
-    {provide: Metadata, useClass: MetadataBase, deps: [Config]},
-    Request
-  ]
-})
+@NgModule()
 export class UrlResolverModule {
+  static initialize(data?: Object): ModuleWithProviders {
+    return {
+      ngModule: UrlResolverModule,
+      providers: [
+        Resolve,
+        { provide: ConfigRoutesToken, useValue: data },
+        { provide: Metadata, useClass: MetadataBase },
+        Request
+      ]
+    };
+  }
 }

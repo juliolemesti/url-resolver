@@ -3,7 +3,21 @@ import { Metadata } from './metadata/metadata';
 
 @Injectable()
 export class Resolve {
-  constructor(private metadata: Metadata) {
+
+  private preffixVariable: string = '{';
+
+  private suffixVariable: string = '}';
+
+  constructor(public metadata: Metadata) {}
+
+  setPreffixVariable(preffix: string): this {
+    this.preffixVariable = preffix;
+    return this;
+  }
+
+  setSuffixVariable(suffix: string): this {
+    this.suffixVariable = suffix;
+    return this;
   }
 
   url(id: string, params?: Object): string {
@@ -24,11 +38,12 @@ export class Resolve {
       );
     }
 
+    // return parameters globals
+    let paramsGlobals = this.metadata.getDefaults('params');
+
     if (params && Object.keys(params).length) {
       // validate parameters globals
       this.validateParamsGlobals(params);
-      // return parameters globals
-      let paramsGlobals = this.metadata.getParamsGlobals();
 
       // replacements of parameters globals
       for (let paramGlobal in paramsGlobals) {
@@ -38,34 +53,70 @@ export class Resolve {
       }
     }
 
+    url = this.replaceUrlParamsGlobalsDefaultValue(paramsGlobals, url);
+    url = this.replaceUrlVariables(url);
+    url = this.replaceUrlHost(url);
+
+    // delete params not required
+    let regex = new RegExp('(?:(:?(:?\\?|&)[\\w\\-]+=)|\\/)\\' + this.preffixVariable + '[\\w\\-]+\\' + this.suffixVariable, 'g');
+    url = url.replace(regex, '');
+
     return url;
   }
 
-  replaceUrl(url: string, index: string, value: any, params: Object, paramsLeftOver?: Array<string>) {
-    let regex = new RegExp('\\$' + index, 'g'),
+  replaceUrl(url: string, index: string, value: any, params?: Object, paramsLeftOver?: Array<string>) {
+    let variable = '\\' + this.preffixVariable + index + '\\' + this.suffixVariable,
+        regex = new RegExp(variable, 'g'),
         urlPrevious = url;
 
-    paramsLeftOver = paramsLeftOver || [];
-
     // replace on url
-    url = url.replace(regex, value);
+    if (value !== null && value !== undefined) {
+      url = url.replace(regex, value);
+    }
 
     // parameters not exists on url are deleted
-    if (!urlPrevious.match(regex)) {
+    if (!urlPrevious.match(regex) && Array.isArray(paramsLeftOver)) {
       paramsLeftOver.push(index);
-    } else if (urlPrevious.match(regex)) {
+    } else if (urlPrevious.match(regex) && (typeof params === 'object')) {
       delete params[index];
     }
 
     return url;
   }
 
-  getMetadata(): Metadata {
-    return this.metadata;
+  private replaceUrlParamsGlobalsDefaultValue(paramsGlobals: any, url: string): string {
+    for (let paramGlobal in paramsGlobals) {
+      if (paramsGlobals[paramGlobal]['default'] !== null) {
+        url = this.replaceUrl(url, paramGlobal, paramsGlobals[paramGlobal]['default']);
+      }
+    }
+
+    return url;
+  }
+
+  private replaceUrlVariables(url: string): string {
+    let variables = this.metadata.getDefaults('variables');
+
+    for (let variableName in variables) {
+      url = this.replaceUrl(url, variableName, variables[variableName]);
+    }
+
+    return url;
+  }
+
+  private replaceUrlHost(url: string): string {
+    // replace host
+    let host = this.metadata.getDefaults('host') || '';
+
+    if (url.indexOf('http') === -1) {
+      url = host.replace(/\/$/, '') + '/' + url.replace(/^\//, '');
+    }
+
+    return url;
   }
 
   validateParamsGlobals(params: Object) {
-    this._validateParams(this.metadata.getParamsGlobals(), params, true);
+    this._validateParams(this.metadata.getDefaults('params'), params, true);
   }
 
   validateParams(id: string, params: Object, onlyAssign?: boolean) {
@@ -96,7 +147,7 @@ export class Resolve {
 
     defaultValue = paramsIds[param].default;
 
-    if (params[param] === null || params[param] === undefined) {
+    if ((defaultValue !== null && defaultValue !== undefined) && (params[param] === null || params[param] === undefined)) {
       params[param] = defaultValue;
     }
   }
@@ -111,7 +162,7 @@ export class Resolve {
 
     // validate by data type
     type = paramsIds[param].type || 'string';
-    if (typeof params[param] !== type) {
+    if (typeof params[param] !== type && (params[param] !== null && params[param] !== undefined)) {
       throw 'Data type invalid parameter: ' + param + ' type ' + (typeof params[param]);
     }
 

@@ -1,6 +1,2 @@
-
-export * from './metadata/metadata';
-export * from './metadata/data-type';
-export * from './resolve';
-export * from './request';
 export * from './module';
+export * from './providers';
